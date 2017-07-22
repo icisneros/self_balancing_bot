@@ -1,0 +1,11 @@
+This is a scheme for verifying Bluetooth communication between two paired HC-05 modules.
+
+
+Load "simple_bt_message_write.ino" onto the Arduino controlling the Master module.
+
+Load "simple_bt_message_read.ino" onto the Arduino controlling the Slave module.
+
+
+The Master module should broadcast the message "Hello from the Master module!"
+once every second.  If the two modules are properly paired, then the Slave module
+will read this message and print it to the serial monitor.
