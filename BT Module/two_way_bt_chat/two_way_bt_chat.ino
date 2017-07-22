@@ -12,11 +12,12 @@ SoftwareSerial BTserial(2, 3); // RX | TX
 // 
  
 char c = ' ';
+const char* test_string =  "Hello from Slave module!";
  
 void setup() 
 {
     Serial.begin(9600);
-    Serial.println("Arduino is ready");
+    Serial.println("Slave module is ready");
  
     // HC-05 default serial speed for commincation mode is 9600
     BTserial.begin(9600);  
@@ -32,11 +33,11 @@ void loop()
         Serial.write(c);
     }
  
-    // Keep reading from Arduino Serial Monitor and send to HC-05
-    if (Serial.available())
-    {
-        c =  Serial.read();
-        BTserial.write(c);  
-    }
+//    // Keep reading from Arduino Serial Monitor and send to HC-05
+//    if (Serial.available())
+//    {
+//        BTserial.write(test_string);  
+//    }
+
  
 }
