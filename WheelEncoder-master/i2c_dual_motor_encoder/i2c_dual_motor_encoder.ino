@@ -80,9 +80,9 @@ void setup()
 
 void loop()
 {
-  //delay(20);
-  //Serial.println(".");
-  //requestEvent();
+  delay(20);
+  Serial.println("\n\nNew datapoint ===============\n");
+  requestEvent();
 }
 
 void changeModeConfig()
@@ -155,13 +155,12 @@ void requestEvent()
    				_buffer.map.id);
    	//*/
 
-  /*
-	Serial.printf("%d : %d \t|\t %d: %d\n",
-   				_buffer.map.wheel_1_delta,
-   				_buffer.map.wheel_1_speed,
-   				_buffer.map.wheel_2_delta,
-   				_buffer.map.wheel_2_speed);
-   //*/
+
+  Serial.printf("%d : %d \t|\t %d: %d\n",
+  _buffer.map.wheel_1_delta,
+  _buffer.map.wheel_1_speed,
+  _buffer.map.wheel_2_delta,
+  _buffer.map.wheel_2_speed);
 
   //Set the buffer to send all bytes
   Wire.write(_buffer.bytes, sizeof(_buffer));
@@ -323,4 +322,5 @@ ISR(PCINT0_vect){
 
   //Serial.printf("2: %d\n",_buffer.map.wheel_2_speed);
 }
+
 
