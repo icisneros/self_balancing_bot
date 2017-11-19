@@ -25,7 +25,7 @@ void setup()
  
 void loop() 
 {
-    BTserial.println("Hello from Master Module!"); 
+    BTserial.write("Hello from Master Module!\n"); 
 //    Serial.println("Printing in Serial Monitor!"); 
     delay(1000); 
 }
