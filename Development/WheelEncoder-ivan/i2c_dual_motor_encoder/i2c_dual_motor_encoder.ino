@@ -132,29 +132,30 @@ void pin_setup()
 
   // ATMEGA
   // PORTD - PCMSK2
-  // p0				// PD0 - RX D  		- PCINT16
-  // p1				// PD1 - TX D  		- PCINT17
-  pinMode(2, INPUT);	// PD2 - INT0 		- PCINT18  WHEEL1
-  pinMode(3, INPUT);	// PD3 - INT1 		- PCINT19  WHEEL1
-//  pinMode(4, INPUT);	// PD4 - XCK / T0 	- PCINT20
-//  pinMode(5, INPUT);	// PD5 - T0			- PCINT21
-//  pinMode(6, INPUT);	// PD6 - T1			- PCINT22
+  // p0			// PD0 - RX D  		- PCINT16
+  // p1			// PD1 - TX D  		- PCINT17
+  //pinMode(2, INPUT);	// PD2 - INT0 		- PCINT18  WHEEL1
+  //pinMode(3, INPUT);	// PD3 - INT1 		- PCINT19  WHEEL1
+  pinMode(4, INPUT);	// PD4 - XCK / T0 	- PCINT20
+  pinMode(5, INPUT);	// PD5 - T0		- PCINT21
+//  pinMode(6, INPUT);	// PD6 - T1		- PCINT22
 //  pinMode(7, INPUT);	// PD7 - AIN0		- PCINT23
 
   // PORTB- PCMSK0
   pinMode(8, INPUT); 	// PB0 - AIN1		- PCINT0   WHEEL2
   pinMode(9, INPUT);	// PB1 - OC1A		- PCINT1   WHEEL2
 //  pinMode(10, INPUT);	// PB2 - OC1B		- PCINT2
-//  pinMode(11, INPUT); 	// PB3 - MOSI / OC2	- PCINT3
-//  pinMode(12, INPUT); 	// PB4 - MISO		- PCINT4
-//  pinMode(13, INPUT); 	// PB5 - SCK		- PCINT5
+//  pinMode(11, INPUT); // PB3 - MOSI / OC2	- PCINT3
+//  pinMode(12, INPUT); // PB4 - MISO		- PCINT4
+//  pinMode(13, INPUT); // PB5 - SCK		- PCINT5
 
 
   // Activate pin change interrupt ports
   PCICR	= _BV(PCIE2) | _BV(PCIE0);  // Turn on Pin Change interrupts for ports 0 and 2
   
   // Choose which pins to use for interrupts
-  PCMSK2 	= _BV(PCINT18);	// | _BV(PCINT19);
+//  PCMSK2 	= _BV(PCINT18);	// | _BV(PCINT19);
+  PCMSK2 	= _BV(PCINT21);	// | _BV(PCINT19);
   PCMSK0 	= _BV(PCINT0);	// | _BV(PCINT1);
   
   // ISR vectors
@@ -165,13 +166,30 @@ void pin_setup()
 
 
 
-// Wheel1 interrupt service
+// Wheel1 interrupt service  (pins 2 and 3)
+//ISR(PCINT2_vect){
+//
+//  if((PIND & B00000100) == 0 && (PIND & B00001000) == 0){
+//    wheel_1++;
+//  }
+//  else if((PIND & B00000100) > 1 && (PIND & B00001000) > 1){
+//    wheel_1++;
+//  }
+//  else{
+//    wheel_1--;
+//  }
+//
+//  //Serial.printf("1: %d\n",_buffer.map.wheel_1_speed);
+//}
+
+
+// Wheel1 interrupt service (pins 4 and 5)
 ISR(PCINT2_vect){
 
-  if((PIND & B00000100) == 0 && (PIND & B00001000) == 0){
+  if((PIND & B00010000) == 0 && (PIND & B00100000) == 0){
     wheel_1++;
   }
-  else if((PIND & B00000100) > 1 && (PIND & B00001000) > 1){
+  else if((PIND & B00010000) > 1 && (PIND & B00100000) > 1){
     wheel_1++;
   }
   else{
@@ -182,8 +200,7 @@ ISR(PCINT2_vect){
 }
 
 
-
-// Wheel2 interrupt service
+// Wheel2 interrupt service  (pins 8 and 9)
 ISR(PCINT0_vect){
 
   if((PINB & B00000001) == 0 && (PINB & B00000010) == 0){
