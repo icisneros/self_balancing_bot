@@ -141,7 +141,7 @@ void loop()
     while (!mpuInterrupt && fifoCount < packetSize)
     {
         //no mpu data - performing PID calculations and output to motors
-        
+        // interestingly, this only reacts when the MPU is no longer updating with new data??
         pid.Compute();
         motorController.move(output, MIN_ABS_SPEED);
         
@@ -186,7 +186,9 @@ void loop()
             Serial.print("\t");
             Serial.println(ypr[2] * 180/M_PI);
         #endif
-        input = ypr[1] * 180/M_PI + 180;
+
+        // Update the input variable
+        input = ypr[1] * 180/M_PI + 180;  // we ejust want to react on the yaw
    }
 }
 
