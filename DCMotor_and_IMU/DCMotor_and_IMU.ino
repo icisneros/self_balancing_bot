@@ -153,6 +153,8 @@ void setup()
         Serial.print(devStatus);
         Serial.println(F(")"));
     }
+
+    Serial.println(F("Finished setup..."));
 }
 
 
