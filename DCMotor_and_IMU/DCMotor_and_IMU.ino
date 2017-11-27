@@ -158,13 +158,14 @@ void setup()
 
 void loop()
 {
+    Serial.print(F("Stuck in loop"));
+    
     // if programming failed, don't try to do anything
     if (!dmpReady)
     {
       Serial.print(F("An error occured")); 
       return;
     }
-
     
     unsigned long lastPrint = millis();
     // wait for MPU interrupt or extra packet(s) available
