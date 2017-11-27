@@ -77,6 +77,21 @@ void setup()
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
         TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
+        boolean error = true;
+        while (error) 
+        {
+          Wire.beginTransmission(0x68);
+          error = Wire.endTransmission(); // if error = 0, we are properly connected
+          if (error) 
+          { // if we aren't properly connected, try connecting again and loop
+            Serial.println("  ");
+            Serial.println("Not properly connected to I2C, trying again");
+            Serial.println(" ");
+            Wire.begin();
+            TWBR = 24; // 400kHz I2C clock
+          }
+        }
+        Serial.println("Properly connected to I2C");
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
         Fastwire::setup(400, true);
     #endif
@@ -160,7 +175,7 @@ void setup()
 
 void loop()
 {
-    Serial.print(F("Stuck in loop"));
+    //Serial.println(F("Stuck in loop"));
     
     // if programming failed, don't try to do anything
     if (!dmpReady)
