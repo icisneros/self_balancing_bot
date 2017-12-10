@@ -18,13 +18,18 @@ int jx_low = -116;
 int jx_high = 116;
 
 // Joystick y range
-int jy_low = -123;
+int jy_low = -114;
 int jy_high = 114;
 
 
 // Digital debouncing
 unsigned long lasttime = 0;
 unsigned long lockout = 300;  // lockout time in milliseconds
+
+
+// Comms
+const char start_symb = 'S';
+const char end_symb = 'N';
 
 
 void setup() 
@@ -47,6 +52,7 @@ void setup()
 void loop() 
 {
 
+    // For debugging
 //    if (nunchuk_read()) {
 //        // Work with nunchuk_data
 //        nunchuk_print();
@@ -65,30 +71,35 @@ void loop()
 
     if (abs(jx) > j_thresh  || abs(jy) > j_thresh || ((cbutton != 0  || zbutton != 0 ) && (millis() - lasttime) > lockout) )
     {
+      
+      // keep track of the time counter
+      lasttime = millis();
+
       // Map the joystick values to the motor speed domain
       jx = map(jx, jx_low, jx_high, motor_low, motor_high);
       jy = map(jy, jy_low, jy_high, motor_low, motor_high);
 
-
-      lasttime = millis();
+      // Convert ints to chars so that it can be sent out via the write function
+      char jx_str[5];
+      char jy_str[5];
+      char cb_str[2];
+      char zb_str[2];
+      
       // write out the payload
-      Serial.print("jx: ");
-      Serial.print(jx, DEC);
-      Serial.print(",  jy: ");
-      Serial.print(jy, DEC);
-      Serial.print("\n");
-      Serial.print("cb: ");
-      Serial.print(cbutton, DEC);
-      Serial.print(",  zb: ");
-      Serial.print(zbutton, DEC);
-
-
+      // there has to be an easier way to just concatenate all of this
+      BTserial.write(start_symb);
+      BTserial.write(itoa(jx, jx_str, 10));
+      BTserial.write(',');
+      BTserial.write(itoa(jy, jy_str, 10));
+      BTserial.write(',');
+      BTserial.write(itoa(cbutton, cb_str, 10));
+      BTserial.write(',');
+      BTserial.write(itoa(zbutton, zb_str, 10));
+      BTserial.write(end_symb);
     }
   }
   
   delay(10);    
 
-
-//  BTserial.write("Hello from Master Module!\n"); 
 
 } 
