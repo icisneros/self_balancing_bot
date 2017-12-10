@@ -21,6 +21,12 @@ int jx_high = 116;
 int jy_low = -123;
 int jy_high = 114;
 
+
+// Digital debouncing
+unsigned long lasttime = 0;
+unsigned long lockout = 300;  // lockout time in milliseconds
+
+
 void setup() 
 {
   
@@ -54,26 +60,33 @@ void loop()
     // Work with nunchuk_data
     int16_t jx = nunchuk_joystickX();
     int16_t jy = nunchuk_joystickY();
-    // Button c
-    // Button z
+    uint8_t cbutton = nunchuk_buttonC();
+    uint8_t zbutton = nunchuk_buttonZ();
 
-    if (abs(jx) > j_thresh  || abs(jy) > j_thresh)
+    if (abs(jx) > j_thresh  || abs(jy) > j_thresh || ((cbutton != 0  || zbutton != 0 ) && (millis() - lasttime) > lockout) )
     {
       // Map the joystick values to the motor speed domain
       jx = map(jx, jx_low, jx_high, motor_low, motor_high);
       jy = map(jy, jy_low, jy_high, motor_low, motor_high);
-      
+
+
+      lasttime = millis();
       // write out the payload
       Serial.print("jx: ");
       Serial.print(jx, DEC);
       Serial.print(",  jy: ");
       Serial.print(jy, DEC);
       Serial.print("\n");
+      Serial.print("cb: ");
+      Serial.print(cbutton, DEC);
+      Serial.print(",  zb: ");
+      Serial.print(zbutton, DEC);
+
+
     }
   }
   
   delay(10);    
-  //Serial.print("nothing\n");
 
 
 //  BTserial.write("Hello from Master Module!\n"); 
