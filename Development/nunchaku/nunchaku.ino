@@ -69,6 +69,8 @@ void loop()
     uint8_t cbutton = nunchuk_buttonC();
     uint8_t zbutton = nunchuk_buttonZ();
 
+    // only send out a message if the joystick is moved beyond the noise floor (j_thresh), or if a button is 
+    // pressed once outside of the lockout time (to prevent duplicates of the same message)
     if (abs(jx) > j_thresh  || abs(jy) > j_thresh || ((cbutton != 0  || zbutton != 0 ) && (millis() - lasttime) > lockout) )
     {
       
@@ -86,6 +88,7 @@ void loop()
       char zb_str[2];
       
       // write out the payload
+      // payload format: Sjx,jy,cb,zbN
       // there has to be an easier way to just concatenate all of this
       BTserial.write(start_symb);
       BTserial.write(itoa(jx, jx_str, 10));
