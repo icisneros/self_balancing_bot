@@ -13,14 +13,13 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
-#if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-    #include "Wire.h"
-#endif
-
-#define MIN_ABS_SPEED 20
 
 MPU6050 mpu;
 #define INTERRUPT_PIN 2  // use pin 2 on Arduino Uno & most boards
+
+// Uncomment to see MPU values
+//#define LOG_INPUT
+
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -33,10 +32,11 @@ uint8_t fifoBuffer[64]; // FIFO storage buffer
 // orientation/motion vars
 Quaternion q;           // [w, x, y, z]         quaternion container
 VectorFloat gravity;    // [x, y, z]            gravity vector
+int16_t gyro[3];        // [x, y, z]            gyro vector
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 //PID
-double originalSetpoint = 175.8;
+double originalSetpoint = 85.0;  // what angle is it when bot is balanced?
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
@@ -60,10 +60,6 @@ Adafruit_DCMotor *right_motor = AFMS.getMotor(2);
 
 
 
-//timers
-long time1Hz = 0;
-long time5Hz = 0;
-
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady()
 {
@@ -73,7 +69,15 @@ void dmpDataReady()
 
 void setup()
 {
+    // initialize serial communication
+    Serial.begin(115200);
+
+    // pinmode init
+    pinMode(INTERRUPT_PIN, INPUT);
+  
+    
     // join I2C bus (I2Cdev library doesn't do this automatically)
+    Serial.println(F("Joining I2C bus..."));
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
         TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
@@ -96,42 +100,29 @@ void setup()
         Fastwire::setup(400, true);
     #endif
 
-    // initialize serial communication
-    // (115200 chosen because it is required for Teapot Demo output, but it's
-    // really up to you depending on your project)
-    Serial.begin(115200);
-    while (!Serial); // wait for Leonardo enumeration, others continue immediately
+
 
     // initialize devices
     Serial.println(F("Initializing I2C devices..."));
     mpu.initialize();
-    pinMode(INTERRUPT_PIN, INPUT);
 
-    Serial.println(F("Initializing Motorboard..."));
-    AFMS.begin();  // create with the default frequency 1.6KHz
-    // Set the speed to start, from 0 (off) to 255 (max speed)
-    left_motor->setSpeed(150);
-//    left_motor->run(FORWARD);
-//    // turn on motor
-    left_motor->run(RELEASE);
-    right_motor->setSpeed(150);
-//    right_motor->run(FORWARD);
-//    // turn on motor
-    right_motor->run(RELEASE);
 
     // verify connection
     Serial.println(F("Testing device connections..."));
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
-
+    delay(2);
+    
     // load and configure the DMP
     Serial.println(F("Initializing DMP..."));
     devStatus = mpu.dmpInitialize();
 
     // supply your own gyro offsets here, scaled for min sensitivity
+    mpu.setXAccelOffset(-2537);
+    mpu.setYAccelOffset(-769);
+    mpu.setZAccelOffset(894);
     mpu.setXGyroOffset(140);
     mpu.setYGyroOffset(161);
     mpu.setZGyroOffset(-113);
-    mpu.setZAccelOffset(894); // 1688 factory default for my test chip
 
     // make sure it worked (returns 0 if so)
     if (devStatus == 0)
@@ -153,7 +144,6 @@ void setup()
         packetSize = mpu.dmpGetFIFOPacketSize();
         
         //setup PID
-        
         pid.SetMode(AUTOMATIC);
         pid.SetSampleTime(10);
         pid.SetOutputLimits(-255, 255);  
@@ -168,6 +158,19 @@ void setup()
         Serial.print(devStatus);
         Serial.println(F(")"));
     }
+
+
+
+    Serial.println(F("Initializing Motorboard..."));
+    AFMS.begin();  // create with the default frequency 1.6KHz
+    // Set the speed to start, from 0 (off) to 255 (max speed)
+    left_motor->setSpeed(150);
+    left_motor->run(RELEASE);
+    right_motor->setSpeed(150);
+    right_motor->run(RELEASE);
+
+
+
 
     Serial.println(F("Finished setup..."));
 }
@@ -198,7 +201,6 @@ void loop()
         uint8_t directionality = FORWARD;
 
         //no mpu data - performing PID calculations and output to motors
-        // interestingly, this only reacts when the MPU is no longer updating with new data??
         pid.Compute();
 
         double abs_output = output;
@@ -251,17 +253,17 @@ void loop()
         mpu.dmpGetQuaternion(&q, fifoBuffer);
         mpu.dmpGetGravity(&gravity, &q);
         mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-        #if LOG_INPUT
+        #ifdef LOG_INPUT
             Serial.print("ypr\t");
-            Serial.print(ypr[0] * 180/M_PI);
+            Serial.print(ypr[0] * 180/M_PI);  // yaw
             Serial.print("\t");
-            Serial.print(ypr[1] * 180/M_PI);
+            Serial.print(ypr[1] * 180/M_PI);  // pitch
             Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI);
+            Serial.println(ypr[2] * 180/M_PI); // roll
         #endif
 
         // Update the input variable
-        input = ypr[1] * 180/M_PI + 180;  // we ejust want to react on the yaw
+        input = ypr[1] * 180/M_PI + 180;  // we just want to react on the pitch (item index 1 in the ypr list)
    }
 }
 
