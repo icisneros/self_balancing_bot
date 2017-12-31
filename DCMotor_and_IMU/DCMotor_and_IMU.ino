@@ -191,13 +191,13 @@ void loop()
     // wait for MPU interrupt or extra packet(s) available
     while (!mpuInterrupt && fifoCount < packetSize)
     {
-      if (millis() - lastPrint > 200UL)  // print status every 200ms
-      {
-        lastPrint = millis();
-        Serial.print(F("mpuInterrupt: ")); Serial.print(mpuInterrupt);
-        Serial.print(F("    fifoCount: ")); Serial.print(fifoCount);
-        Serial.print(F("    packetSize: ")); Serial.println(packetSize);
-      }
+        if (millis() - lastPrint > 200UL)  // print status every 200ms
+        {
+          lastPrint = millis();
+          Serial.print(F("mpuInterrupt: ")); Serial.print(mpuInterrupt);
+          Serial.print(F("    fifoCount: ")); Serial.print(fifoCount);
+          Serial.print(F("    packetSize: ")); Serial.println(packetSize);
+        }
         uint8_t directionality = FORWARD;
 
         //no mpu data - performing PID calculations and output to motors
