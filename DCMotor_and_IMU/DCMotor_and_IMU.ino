@@ -1,27 +1,50 @@
-// taken from: https://diyhacking.com/build-arduino-self-balancing-robot/
+// Setup taken from: https://diyhacking.com/build-arduino-self-balancing-robot/
 
-// PID
+// --------------PID-------------------
 #include <PID_v1.h>
 
-// Motor Control
-//#include <LMotorController.h>
+
+// --------------MOTOR CONTROL-------------------
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 
-// IMU
+
+// --------------IMU-------------------
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
 
+
+//--------------PID SETPOINTS-------------------
+double originalSetpoint = 85.0;  // what angle [DEG] is the IMU when bot is balanced?
+double setpoint = originalSetpoint;
+double movingAngleOffset = 0.1;
+double input, output;
+int moveState=0; //0 = balance; 1 = back; 2 = forth
+//double Kp = 0.32;//0.36; //0.3; 0.0;//
+//double Kd = 0.052; //0.042;
+//double Ki = 5.4; //3.6;
+double Kp = 10;
+double Kd = 0;
+double Ki = 0;
+PID pid(&input, &output, &setpoint, Kp, Ki, Kd, REVERSE);
+
+
+// --------------MOTOR CONTROL-------------------
+// Create the motor shield object with the default I2C address
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+// Or, create it with a different I2C address (say for stacking)
+// Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61); 
+
+// Select which 'port' M1, M2, M3 or M4. In this case, M1
+Adafruit_DCMotor *left_motor = AFMS.getMotor(1);
+// You can also make another motor on port M2
+Adafruit_DCMotor *right_motor = AFMS.getMotor(2);
+
+
+// --------------MPU DATA/STATUS VARS-------------------
 MPU6050 mpu;
-#define INTERRUPT_PIN 2  // use pin 2 on Arduino Uno & most boards
-
-// Uncomment to see MPU values
-//#define LOG_INPUT
-
-
-// MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
 uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
 uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
@@ -35,29 +58,21 @@ VectorFloat gravity;    // [x, y, z]            gravity vector
 int16_t gyro[3];        // [x, y, z]            gyro vector
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
-//PID
-double originalSetpoint = 85.0;  // what angle is it when bot is balanced?
-double setpoint = originalSetpoint;
-double movingAngleOffset = 0.1;
-double input, output;
-int moveState=0; //0 = balance; 1 = back; 2 = forth
-double Kp = 50;
-double Kd = 1.4;
-double Ki = 60;
-PID pid(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
+
+// Uncomment to see MPU values
+//#define LOG_INPUT
+// Uncomment to see Telemetry
+#define LOG_TELEM
 
 
-//MOTOR CONTROLLER
-// Create the motor shield object with the default I2C address
-Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-// Or, create it with a different I2C address (say for stacking)
-// Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61); 
+// --------------PIN DEFINITIONS-------------------
+#define INTERRUPT_PIN 2
 
-// Select which 'port' M1, M2, M3 or M4. In this case, M1
-Adafruit_DCMotor *left_motor = AFMS.getMotor(1);
-// You can also make another motor on port M2
-Adafruit_DCMotor *right_motor = AFMS.getMotor(2);
 
+void init_IO()
+{
+  pinMode(INTERRUPT_PIN, INPUT);
+}
 
 
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
@@ -73,8 +88,7 @@ void setup()
     Serial.begin(115200);
 
     // pinmode init
-    pinMode(INTERRUPT_PIN, INPUT);
-  
+    init_IO();
     
     // join I2C bus (I2Cdev library doesn't do this automatically)
     Serial.println(F("Joining I2C bus..."));
@@ -164,9 +178,9 @@ void setup()
     Serial.println(F("Initializing Motorboard..."));
     AFMS.begin();  // create with the default frequency 1.6KHz
     // Set the speed to start, from 0 (off) to 255 (max speed)
-    left_motor->setSpeed(150);
+//    left_motor->setSpeed(150);
     left_motor->run(RELEASE);
-    right_motor->setSpeed(150);
+//    right_motor->setSpeed(150);
     right_motor->run(RELEASE);
 
 
@@ -178,7 +192,6 @@ void setup()
 
 void loop()
 {
-    //Serial.println(F("Stuck in loop"));
     
     // if programming failed, don't try to do anything
     if (!dmpReady)
@@ -187,39 +200,11 @@ void loop()
       return;
     }
     
-    unsigned long lastPrint = millis();
+
     // wait for MPU interrupt or extra packet(s) available
     while (!mpuInterrupt && fifoCount < packetSize)
     {
-        if (millis() - lastPrint > 200UL)  // print status every 200ms
-        {
-          lastPrint = millis();
-          Serial.print(F("mpuInterrupt: ")); Serial.print(mpuInterrupt);
-          Serial.print(F("    fifoCount: ")); Serial.print(fifoCount);
-          Serial.print(F("    packetSize: ")); Serial.println(packetSize);
-        }
-        uint8_t directionality = FORWARD;
-
-        //no mpu data - performing PID calculations and output to motors
-        pid.Compute();
-
-        double abs_output = output;
-        if (output < 0)
-        {
-          directionality = BACKWARD;
-          abs_output = abs(output);
-        }
-
-        left_motor->run(directionality);
-        right_motor->run(directionality);
-        left_motor->setSpeed(abs_output);
-        right_motor->setSpeed(abs_output); 
-
-        Serial.print("Direction: ");
-        Serial.print(directionality);
-        Serial.print("\nSpeed: ");
-        Serial.print(abs_output);
-        
+        // nothing here
     }
 
     // reset interrupt flag and get INT_STATUS byte
@@ -228,6 +213,8 @@ void loop()
 
     // get current FIFO count
     fifoCount = mpu.getFIFOCount();
+
+//    unsigned long lastPrint = millis();
 
     // check for overflow (this should never happen unless our code is too inefficient)
     if ((mpuIntStatus & 0x10) || fifoCount == 1024)
@@ -251,6 +238,7 @@ void loop()
         fifoCount -= packetSize;
 
         mpu.dmpGetQuaternion(&q, fifoBuffer);
+        mpu.dmpGetGyro(gyro, fifoBuffer);
         mpu.dmpGetGravity(&gravity, &q);
         mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
         #ifdef LOG_INPUT
@@ -262,10 +250,55 @@ void loop()
             Serial.println(ypr[2] * 180/M_PI); // roll
         #endif
 
-        // Update the input variable
-        input = ypr[1] * 180/M_PI + 180;  // we just want to react on the pitch (item index 1 in the ypr list)
+        // Update the input variable (and convert from RAD to DEG)
+//        input = ypr[1] * 180/M_PI + 180;  // we just want to react on the pitch (item index 1 in the ypr list)
+        input = ypr[1] * 180/M_PI;  // we just want to react on the pitch (item index 1 in the ypr list)
+
+        
+//        if (millis() - lastPrint > 200UL)  // print status every 200ms
+//        {
+//          lastPrint = millis();
+//          Serial.print(F("mpuInterrupt: ")); Serial.print(mpuInterrupt);
+//          Serial.print(F("    fifoCount: ")); Serial.print(fifoCount);
+//          Serial.print(F("    packetSize: ")); Serial.println(packetSize);
+//        }
+
+        // Default direction. Use when output > 0. Completely arbitrary.
+        uint8_t directionality = FORWARD;
+
+        //no mpu data - performing PID calculations and output to motors
+        pid.Compute();
+
+        double abs_output = output;
+        if (output < 0)
+        {
+          directionality = BACKWARD;
+          abs_output = abs(output);
+        }
+
+        left_motor->run(directionality);
+        right_motor->run(directionality);
+        left_motor->setSpeed(abs_output);
+        right_motor->setSpeed(abs_output); 
+
+        #ifdef LOG_TELEM
+          Serial.print("PID Output: ");
+          Serial.println(output); 
+          Serial.print("PID Input: ");
+          Serial.println(input); 
+          Serial.print("Direction: ");
+          Serial.println(directionality);
+          Serial.print("\nSpeed: ");
+          Serial.println(abs_output); 
+        #endif
+
+        mpu.resetFIFO();  // To prevent overflows
+
    }
 }
+
+
+
 
 
 
