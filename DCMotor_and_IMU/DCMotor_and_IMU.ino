@@ -1,12 +1,12 @@
 // Setup taken from: https://diyhacking.com/build-arduino-self-balancing-robot/
 
 // --------------PID-------------------
-#include <PID_v1.h>
+#include "PID_v1.h"
 
 
 // --------------MOTOR CONTROL-------------------
 #include <Wire.h>
-#include <Adafruit_MotorShield.h>
+#include "Adafruit_MotorShield.h"
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 
 
@@ -15,18 +15,26 @@
 #include "MPU6050_6Axis_MotionApps20.h"
 
 
+// --------------DEBUGGING-------------------
+// Uncomment to see MPU values
+#define LOG_INPUT
+// Uncomment to see Telemetry
+//#define LOG_TELEM
+// Uncomment to output serial plot variables
+//#define SERIAL_PLOT
+
+long loop_count = 0;
+long overflows = 0;
+
 
 //--------------PID SETPOINTS-------------------
-double originalSetpoint = 85.0;  // what angle [DEG] is the IMU when bot is balanced?
+double originalSetpoint = 87.7;  // what angle [DEG] is the IMU when bot is balanced?
 double setpoint = originalSetpoint;
-double movingAngleOffset = 0.1;
+//double movingAngleOffset = 0.1;
 double input, output;
-int moveState=0; //0 = balance; 1 = back; 2 = forth
-//double Kp = 0.32;//0.36; //0.3; 0.0;//
-//double Kd = 0.052; //0.042;
-//double Ki = 5.4; //3.6;
-double Kp = 10;
-double Kd = 0;
+//int moveState=0; //0 = balance; 1 = back; 2 = forth
+double Kp = 50; //50 > Kp > 35  //50 //34
+double Kd = 0; // 1 > Kd > 0
 double Ki = 0;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, REVERSE);
 
@@ -59,11 +67,6 @@ int16_t gyro[3];        // [x, y, z]            gyro vector
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 
-// Uncomment to see MPU values
-//#define LOG_INPUT
-// Uncomment to see Telemetry
-#define LOG_TELEM
-
 
 // --------------PIN DEFINITIONS-------------------
 #define INTERRUPT_PIN 2
@@ -86,6 +89,7 @@ void setup()
 {
     // initialize serial communication
     Serial.begin(115200);
+    while(!Serial);
 
     // pinmode init
     init_IO();
@@ -95,6 +99,7 @@ void setup()
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
         TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
+        Wire.setClock(400000);
         boolean error = true;
         while (error) 
         {
@@ -131,12 +136,12 @@ void setup()
     devStatus = mpu.dmpInitialize();
 
     // supply your own gyro offsets here, scaled for min sensitivity
-    mpu.setXAccelOffset(-2537);
-    mpu.setYAccelOffset(-769);
-    mpu.setZAccelOffset(894);
-    mpu.setXGyroOffset(140);
-    mpu.setYGyroOffset(161);
-    mpu.setZGyroOffset(-113);
+    mpu.setXAccelOffset(-2423);
+    mpu.setYAccelOffset(-806);
+    mpu.setZAccelOffset(888);
+    mpu.setXGyroOffset(136);
+    mpu.setYGyroOffset(160);
+    mpu.setZGyroOffset(-110);
 
     // make sure it worked (returns 0 if so)
     if (devStatus == 0)
@@ -156,11 +161,28 @@ void setup()
 
         // get expected DMP packet size for later comparison
         packetSize = mpu.dmpGetFIFOPacketSize();
+
         
-        //setup PID
+        Serial.println(F("Initializing PID..."));
         pid.SetMode(AUTOMATIC);
-        pid.SetSampleTime(10);
+        pid.SetSampleTime(15);
         pid.SetOutputLimits(-255, 255);  
+
+
+        Serial.println(F("Initializing Motorboard..."));
+        AFMS.begin();  // create with the default frequency 1.6KHz
+        // Set the speed at start to 0(off) so it doesn't go running off. Max speed is 255
+        left_motor->setSpeed(0);
+        left_motor->run(RELEASE);
+        right_motor->setSpeed(0);
+        right_motor->run(RELEASE);
+    
+
+        Serial.println(F("Finished setup..."));
+
+
+
+
     }
     else
     {
@@ -171,22 +193,13 @@ void setup()
         Serial.print(F("DMP Initialization failed (code "));
         Serial.print(devStatus);
         Serial.println(F(")"));
+        Serial.println(F("Initiating halt..."));
+        while(1);
     }
 
 
 
-    Serial.println(F("Initializing Motorboard..."));
-    AFMS.begin();  // create with the default frequency 1.6KHz
-    // Set the speed to start, from 0 (off) to 255 (max speed)
-//    left_motor->setSpeed(150);
-    left_motor->run(RELEASE);
-//    right_motor->setSpeed(150);
-    right_motor->run(RELEASE);
 
-
-
-
-    Serial.println(F("Finished setup..."));
 }
 
 
@@ -200,12 +213,13 @@ void loop()
       return;
     }
     
-
+    
     // wait for MPU interrupt or extra packet(s) available
     while (!mpuInterrupt && fifoCount < packetSize)
     {
         // nothing here
     }
+
 
     // reset interrupt flag and get INT_STATUS byte
     mpuInterrupt = false;
@@ -214,6 +228,7 @@ void loop()
     // get current FIFO count
     fifoCount = mpu.getFIFOCount();
 
+
 //    unsigned long lastPrint = millis();
 
     // check for overflow (this should never happen unless our code is too inefficient)
@@ -221,6 +236,7 @@ void loop()
     {
         // reset so we can continue cleanly
         mpu.resetFIFO();
+        overflows += 1;
         Serial.println(F("FIFO overflow!"));
 
     // otherwise, check for DMP data ready interrupt (this should happen frequently)
@@ -228,7 +244,10 @@ void loop()
     else if (mpuIntStatus & 0x02)
     {
         // wait for correct available data length, should be a VERY short wait
-        while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
+        while (fifoCount < packetSize)
+        {
+          fifoCount = mpu.getFIFOCount();
+        }
 
         // read a packet from FIFO
         mpu.getFIFOBytes(fifoBuffer, packetSize);
@@ -237,24 +256,44 @@ void loop()
         // (this lets us immediately read more without waiting for an interrupt)
         fifoCount -= packetSize;
 
+
         mpu.dmpGetQuaternion(&q, fifoBuffer);
         mpu.dmpGetGyro(gyro, fifoBuffer);
         mpu.dmpGetGravity(&gravity, &q);
         mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-        #ifdef LOG_INPUT
-            Serial.print("ypr\t");
-            Serial.print(ypr[0] * 180/M_PI);  // yaw
-            Serial.print("\t");
-            Serial.print(ypr[1] * 180/M_PI);  // pitch
-            Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI); // roll
-        #endif
+
 
         // Update the input variable (and convert from RAD to DEG)
-//        input = ypr[1] * 180/M_PI + 180;  // we just want to react on the pitch (item index 1 in the ypr list)
         input = ypr[1] * 180/M_PI;  // we just want to react on the pitch (item index 1 in the ypr list)
 
-        
+
+
+        // Default direction. Use when output > 0. Completely arbitrary.
+        uint8_t directionality = FORWARD;
+
+
+        //no mpu data - performing PID calculations and output to motors
+        pid.Compute();
+
+
+        double abs_output = output;
+//        if (isnan(output)) 
+//        {
+//            abs_output = 0.0;
+//        }
+        if (output < 0)
+        {
+          directionality = BACKWARD;
+          abs_output = abs(output);
+        }
+
+
+        left_motor->run(directionality);
+        right_motor->run(directionality);
+        left_motor->setSpeed(abs_output);
+        right_motor->setSpeed(abs_output);
+
+
 //        if (millis() - lastPrint > 200UL)  // print status every 200ms
 //        {
 //          lastPrint = millis();
@@ -263,38 +302,47 @@ void loop()
 //          Serial.print(F("    packetSize: ")); Serial.println(packetSize);
 //        }
 
-        // Default direction. Use when output > 0. Completely arbitrary.
-        uint8_t directionality = FORWARD;
+        #ifdef LOG_INPUT
+            Serial.print("\nloop_count: ");
+            Serial.println(loop_count);
+            Serial.print("overflow count: ");
+            Serial.println(overflows);
+            Serial.print("ypr\t");
+            Serial.print(ypr[0] * 180/M_PI);  // yaw
+            Serial.print("\t");
+            Serial.print(ypr[1] * 180/M_PI);  // pitch
+            Serial.print("\t");
+            Serial.println(ypr[2] * 180/M_PI); // roll
+        #endif
 
-        //no mpu data - performing PID calculations and output to motors
-        pid.Compute();
-
-        double abs_output = output;
-        if (output < 0)
-        {
-          directionality = BACKWARD;
-          abs_output = abs(output);
-        }
-
-        left_motor->run(directionality);
-        right_motor->run(directionality);
-        left_motor->setSpeed(abs_output);
-        right_motor->setSpeed(abs_output); 
 
         #ifdef LOG_TELEM
+          Serial.print("\nloop_count: ");
+          Serial.println(loop_count); 
           Serial.print("PID Output: ");
           Serial.println(output); 
           Serial.print("PID Input: ");
           Serial.println(input); 
           Serial.print("Direction: ");
           Serial.println(directionality);
-          Serial.print("\nSpeed: ");
+          Serial.print("Speed: ");
           Serial.println(abs_output); 
         #endif
+
+
+
+        #ifdef SERIAL_PLOT
+          Serial.print(input); 
+          Serial.print(",");
+          Serial.println(setpoint);
+        #endif
+
 
         mpu.resetFIFO();  // To prevent overflows
 
    }
+
+   loop_count += 1;
 }
 
 
