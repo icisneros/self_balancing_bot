@@ -33,7 +33,7 @@ double setpoint = originalSetpoint;
 //double movingAngleOffset = 0.1;
 double input, output;
 //int moveState=0; //0 = balance; 1 = back; 2 = forth
-double Kp = 50; //50 > Kp > 35  //50 //34
+double Kp = 20; //50 > Kp > 35  //50 //34
 double Kd = 0; // 1 > Kd > 0
 double Ki = 0;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, REVERSE);
@@ -65,6 +65,55 @@ Quaternion q;           // [w, x, y, z]         quaternion container
 VectorFloat gravity;    // [x, y, z]            gravity vector
 int16_t gyro[3];        // [x, y, z]            gyro vector
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+float Yaw, Pitch, Roll; // in degrees
+
+//                       XA      YA     ZA     XG     YG      ZG
+int MPUOffsets[6] = {  -2423,  -806,   888,    136,   160,   -110}; //MPU6050 on balanceing bot
+
+
+
+
+// +-+++-------+++++----------+++++++_-0000-------------
+// ================================================================
+// ===                      MPU DMP SETUP                       ===
+// ================================================================
+int FifoAlive = 0; // tests if the interrupt is triggering
+//int IsAlive = -20;     // counts interrupt start at -20 to get 20+ good values before assuming connected
+// MPU control/status vars
+//uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
+//uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
+//uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
+//uint16_t fifoCount;     // count of all bytes currently in FIFO
+//uint8_t fifoBuffer[64]; // FIFO storage buffer
+
+// orientation/motion vars
+//Quaternion q;           // [w, x, y, z]         quaternion container
+//VectorInt16 aa;         // [x, y, z]            accel sensor measurements
+//VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
+//VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
+//VectorFloat gravity;    // [x, y, z]            gravity vector
+//float euler[3];         // [psi, theta, phi]    Euler angle container
+//float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+//float Yaw, Pitch, Roll; // in degrees
+
+// ================================================================
+// ===                      Control Global Variables            ===
+// ================================================================
+//float angle_now = 0;
+//float angle_speed_now = 0;
+//float angle_sum = 0;
+//unsigned long time_now = 0;
+//float filter_spread = 0.7;
+//int voltage = 0;
+//double Kp = 70; //50 > Kp > 35  //50 //34
+//double Kd = 0; // 1 > Kd > 0
+//double Ki = 0;
+
+uint8_t directionality;
+bool motor_toggle = true; // true=left;  false = right
+// +-+++-------+++++----------+++++++_-0000-------------
+
+
 
 
 
@@ -72,10 +121,7 @@ float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gra
 #define INTERRUPT_PIN 2
 
 
-void init_IO()
-{
-  pinMode(INTERRUPT_PIN, INPUT);
-}
+
 
 
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
@@ -87,15 +133,135 @@ void dmpDataReady()
 
 void setup()
 {
+
     // initialize serial communication
     Serial.begin(115200);
     while(!Serial);
 
-    // pinmode init
+
+    Serial.println(F("Initializing the IO pins..."));
     init_IO();
     
-    // join I2C bus (I2Cdev library doesn't do this automatically)
+
     Serial.println(F("Joining I2C bus..."));
+    i2cSetup();
+
+
+    Serial.println(F("Initializing MPU6050..."));
+    MPU6050Connect();
+
+
+//    Serial.println(F("Initializing PID..."));
+    pid.SetMode(AUTOMATIC);
+    pid.SetSampleTime(15);
+    pid.SetOutputLimits(-255, 255);  
+
+
+    Serial.println(F("Initializing Motorboard..."));
+    motor_shield_setup();
+
+
+
+    Serial.println(F("Finished setup..."));
+    
+}
+
+
+void loop() {
+  if (mpuInterrupt ) { // wait for MPU interrupt or extra packet(s) available
+    GetDMP(); // Gets the MPU Data and canculates angles
+    pid_control();
+    if (motor_toggle)
+    {
+      control_left();
+      motor_toggle = false;
+    }
+    else{
+      control_right();
+      motor_toggle = true;
+    }
+  }
+
+  static long QTimer = millis();
+  if ((long)( millis() - QTimer ) >= 20) {
+    QTimer = millis();
+    Serial.print(F("\t Yaw ")); Serial.print(Yaw);
+    Serial.print(F("\t Pitch ")); Serial.print(Pitch);
+    Serial.print(F("\t Roll ")); Serial.print(Roll);
+    Serial.print(F("\t error: ")); Serial.print(Pitch - setpoint);
+    Serial.print(F("\t output: ")); Serial.print(output);
+    Serial.println();
+  }
+}
+
+
+
+
+void init_IO()
+{
+  pinMode(INTERRUPT_PIN, INPUT);
+}
+
+// ================================================================
+// ===                      init the IMU                        ===
+// ================================================================
+void MPU6050Connect() {
+  static int MPUInitCntr = 0;
+  // initialize device
+  mpu.initialize(); // same
+  // load and configure the DMP
+  devStatus = mpu.dmpInitialize();// same
+
+  if (devStatus != 0) {
+    // ERROR!
+    // 1 = initial memory load failed
+    // 2 = DMP configuration updates failed
+    // (if it's going to break, usually the code will be 1)
+
+    char * StatStr[5] { "No Error", "initial memory load failed", "DMP configuration updates failed", "3", "4"};
+
+    MPUInitCntr++;
+
+    Serial.print(F("MPU connection Try #"));
+    Serial.println(MPUInitCntr);
+    Serial.print(F("DMP Initialization failed (code "));
+    Serial.print(StatStr[devStatus]);
+    Serial.println(F(")"));
+
+    if (MPUInitCntr >= 10) return; //only try 10 times
+    delay(1000);
+    MPU6050Connect(); // Lets try again
+    return;
+  }
+
+  mpu.setXAccelOffset(MPUOffsets[0]);
+  mpu.setYAccelOffset(MPUOffsets[1]);
+  mpu.setZAccelOffset(MPUOffsets[2]);
+  mpu.setXGyroOffset(MPUOffsets[3]);
+  mpu.setYGyroOffset(MPUOffsets[4]);
+  mpu.setZGyroOffset(MPUOffsets[5]);
+
+  Serial.println(F("Enabling DMP..."));
+  mpu.setDMPEnabled(true);
+  // enable Arduino interrupt detection
+
+  Serial.println(F("Enabling interrupt detection (Arduino external interrupt pin 2 on the Uno)..."));
+  attachInterrupt(0, dmpDataReady, FALLING); //pin 2 on the Uno
+
+  mpuIntStatus = mpu.getIntStatus(); // Same
+  // get expected DMP packet size for later comparison
+  packetSize = mpu.dmpGetFIFOPacketSize();
+  delay(1000); // Let it Stabalize
+  mpu.resetFIFO(); // Clear fifo buffer
+  mpu.getIntStatus();
+  mpuInterrupt = false; // wait for next interrupt
+
+}
+
+// ================================================================
+// ===                      i2c SETUP Items                     ===
+// ================================================================
+void i2cSetup() {
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
         TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
@@ -118,235 +284,140 @@ void setup()
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
         Fastwire::setup(400, true);
     #endif
-
-
-
-    // initialize devices
-    Serial.println(F("Initializing I2C devices..."));
-    mpu.initialize();
-
-
-    // verify connection
-    Serial.println(F("Testing device connections..."));
-    Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
-    delay(2);
-    
-    // load and configure the DMP
-    Serial.println(F("Initializing DMP..."));
-    devStatus = mpu.dmpInitialize();
-
-    // supply your own gyro offsets here, scaled for min sensitivity
-    mpu.setXAccelOffset(-2423);
-    mpu.setYAccelOffset(-806);
-    mpu.setZAccelOffset(888);
-    mpu.setXGyroOffset(136);
-    mpu.setYGyroOffset(160);
-    mpu.setZGyroOffset(-110);
-
-    // make sure it worked (returns 0 if so)
-    if (devStatus == 0)
-    {
-        // turn on the DMP, now that it's ready
-        Serial.println(F("Enabling DMP..."));
-        mpu.setDMPEnabled(true);
-
-        // enable Arduino interrupt detection
-        Serial.println(F("Enabling interrupt detection (Arduino external interrupt 0)..."));
-        attachInterrupt(0, dmpDataReady, RISING);
-        mpuIntStatus = mpu.getIntStatus();
-
-        // set our DMP Ready flag so the main loop() function knows it's okay to use it
-        Serial.println(F("DMP ready! Waiting for first interrupt..."));
-        dmpReady = true;
-
-        // get expected DMP packet size for later comparison
-        packetSize = mpu.dmpGetFIFOPacketSize();
-
-        
-        Serial.println(F("Initializing PID..."));
-        pid.SetMode(AUTOMATIC);
-        pid.SetSampleTime(15);
-        pid.SetOutputLimits(-255, 255);  
-
-
-        Serial.println(F("Initializing Motorboard..."));
-        AFMS.begin();  // create with the default frequency 1.6KHz
-        // Set the speed at start to 0(off) so it doesn't go running off. Max speed is 255
-        left_motor->setSpeed(0);
-        left_motor->run(RELEASE);
-        right_motor->setSpeed(0);
-        right_motor->run(RELEASE);
-    
-
-        Serial.println(F("Finished setup..."));
-
-
-
-
-    }
-    else
-    {
-        // ERROR!
-        // 1 = initial memory load failed
-        // 2 = DMP configuration updates failed
-        // (if it's going to break, usually the code will be 1)
-        Serial.print(F("DMP Initialization failed (code "));
-        Serial.print(devStatus);
-        Serial.println(F(")"));
-        Serial.println(F("Initiating halt..."));
-        while(1);
-    }
-
-
-
-
 }
 
 
-void loop()
-{
-    
-    // if programming failed, don't try to do anything
-    if (!dmpReady)
-    {
-      Serial.print(F("An error occured")); 
-      return;
+// ================================================================
+// ===                   motor Shield Setup                     ===
+// ================================================================
+void motor_shield_setup() {
+    AFMS.begin();  // create with the default frequency 1.6KHz
+    // Set the speed at start to 0(off) so it doesn't go running off. Max speed is 255
+    left_motor->setSpeed(0);
+    left_motor->run(RELEASE);
+    right_motor->setSpeed(0);
+    right_motor->run(RELEASE);
+}
+
+
+// ================================================================
+// ===        read angle values from the DMP on the IMU         ===
+// ================================================================
+void GetDMP() {
+  // Serial.println(F("FIFO interrupt at:"));
+  // Serial.println(micros());
+  mpuInterrupt = false;
+  FifoAlive = 1;
+  fifoCount = mpu.getFIFOCount();
+  /*
+  fifoCount is a 16-bit unsigned value. Indicates the number of bytes stored in the FIFO buffer.
+  This number is in turn the number of bytes that can be read from the FIFO buffer and it is
+  directly proportional to the number of samples available given the set of sensor data bound
+  to be stored in the FIFO
+  */
+
+  // PacketSize = 42; refference in MPU6050_6Axis_MotionApps20.h Line 527
+  // FIFO Buffer Size = 1024;
+  uint16_t MaxPackets = 20;// 20*42=840 leaving us with  2 Packets (out of a total of 24 packets) left before we overflow.
+  // If we overflow the entire FIFO buffer will be corrupt and we must discard it!
+
+  // At this point in the code FIFO Packets should be at 1 99% of the time if not we need to look to see where we are skipping samples.
+  if ((fifoCount % packetSize) || (fifoCount > (packetSize * MaxPackets)) || (fifoCount < packetSize)) { // we have failed Reset and wait till next time!
+//    digitalWrite(LED_PIN, LOW); // lets turn off the blinking light so we can see we are failing.
+    Serial.println(F("Reset FIFO"));
+    if (fifoCount % packetSize) Serial.print(F("\t Packet corruption")); // fifoCount / packetSize returns a remainder... Not good! This should never happen if all is well.
+    Serial.print(F("\tfifoCount ")); Serial.print(fifoCount);
+    Serial.print(F("\tpacketSize ")); Serial.print(packetSize);
+
+    mpuIntStatus = mpu.getIntStatus(); // reads MPU6050_RA_INT_STATUS       0x3A
+    Serial.print(F("\tMPU Int Status ")); Serial.print(mpuIntStatus , BIN);
+    // MPU6050_RA_INT_STATUS       0x3A
+    //
+    // Bit7, Bit6, Bit5, Bit4          , Bit3       , Bit2, Bit1, Bit0
+    // ----, ----, ----, FIFO_OFLOW_INT, I2C_MST_INT, ----, ----, DATA_RDY_INT
+
+    /*
+    Bit4 FIFO_OFLOW_INT: This bit automatically sets to 1 when a FIFO buffer overflow interrupt has been generated.
+    Bit3 I2C_MST_INT: This bit automatically sets to 1 when an I2C Master interrupt has been generated. For a list of I2C Master interrupts, please refer to Register 54.
+    Bit1 DATA_RDY_INT This bit automatically sets to 1 when a Data Ready interrupt is generated.
+    */
+    if (mpuIntStatus & B10000) { //FIFO_OFLOW_INT
+      Serial.print(F("\tFIFO buffer overflow interrupt "));
     }
-    
-    
-    // wait for MPU interrupt or extra packet(s) available
-    while (!mpuInterrupt && fifoCount < packetSize)
-    {
-        // nothing here
+    if (mpuIntStatus & B1000) { //I2C_MST_INT
+      Serial.print(F("\tSlave I2c Device Status Int "));
     }
-
-
-    // reset interrupt flag and get INT_STATUS byte
-    mpuInterrupt = false;
-    mpuIntStatus = mpu.getIntStatus();
-
-    // get current FIFO count
-    fifoCount = mpu.getFIFOCount();
-
-
-//    unsigned long lastPrint = millis();
-
-    // check for overflow (this should never happen unless our code is too inefficient)
-    if ((mpuIntStatus & 0x10) || fifoCount == 1024)
-    {
-        // reset so we can continue cleanly
-        mpu.resetFIFO();
-        overflows += 1;
-        Serial.println(F("FIFO overflow!"));
-
-    // otherwise, check for DMP data ready interrupt (this should happen frequently)
+    if (mpuIntStatus & B1) { //DATA_RDY_INT
+      Serial.print(F("\tData Ready interrupt "));
     }
-    else if (mpuIntStatus & 0x02)
-    {
-        // wait for correct available data length, should be a VERY short wait
-        while (fifoCount < packetSize)
-        {
-          fifoCount = mpu.getFIFOCount();
-        }
+    Serial.println();
+    //I2C_MST_STATUS
+    //PASS_THROUGH, I2C_SLV4_DONE,I2C_LOST_ARB,I2C_SLV4_NACK,I2C_SLV3_NACK,I2C_SLV2_NACK,I2C_SLV1_NACK,I2C_SLV0_NACK,
+    mpu.resetFIFO();// clear the buffer and start over
+    mpu.getIntStatus(); // make sure status is cleared we will read it again.
+  } else {
+    while (fifoCount  >= packetSize) { // Get the packets until we have the latest!
+      if (fifoCount < packetSize) break; // Something is left over and we don't want it!!!
+      mpu.getFIFOBytes(fifoBuffer, packetSize); // lets do the magic and get the data
+      fifoCount -= packetSize;
+    }
+    MPUMath(); // <<<<<<<<<<<<<<<<<<<<<<<<<<<< On success MPUMath() <<<<<<<<<<<<<<<<<<<
+//    digitalWrite(LED_PIN, !digitalRead(LED_PIN)); // Blink the Light
+    if (fifoCount > 0) mpu.resetFIFO();
+  }
+}
 
-        // read a packet from FIFO
-        mpu.getFIFOBytes(fifoBuffer, packetSize);
-        
-        // track FIFO count here in case there is > 1 packet available
-        // (this lets us immediately read more without waiting for an interrupt)
-        fifoCount -= packetSize;
-
-
-        mpu.dmpGetQuaternion(&q, fifoBuffer);
-        mpu.dmpGetGyro(gyro, fifoBuffer);
-        mpu.dmpGetGravity(&gravity, &q);
-        mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-
-
-        // Update the input variable (and convert from RAD to DEG)
-        input = ypr[1] * 180/M_PI;  // we just want to react on the pitch (item index 1 in the ypr list)
+// ================================================================
+// ===                   PID Implementation                     ===
+// ================================================================
+void pid_control() {
+  input = Pitch;  // we just want to react on the pitch (item index 1 in the ypr list)
 
 
-
-        // Default direction. Use when output > 0. Completely arbitrary.
-        uint8_t directionality = FORWARD;
-
-
-        //no mpu data - performing PID calculations and output to motors
-        pid.Compute();
+  //performing PID calculations and output to motors
+  pid.Compute();
 
 
-        double abs_output = output;
 //        if (isnan(output)) 
 //        {
 //            abs_output = 0.0;
 //        }
-        if (output < 0)
-        {
-          directionality = BACKWARD;
-          abs_output = abs(output);
-        }
-
-
-        left_motor->run(directionality);
-        right_motor->run(directionality);
-        left_motor->setSpeed(abs_output);
-        right_motor->setSpeed(abs_output);
-
-
-//        if (millis() - lastPrint > 200UL)  // print status every 200ms
-//        {
-//          lastPrint = millis();
-//          Serial.print(F("mpuInterrupt: ")); Serial.print(mpuInterrupt);
-//          Serial.print(F("    fifoCount: ")); Serial.print(fifoCount);
-//          Serial.print(F("    packetSize: ")); Serial.println(packetSize);
-//        }
-
-        #ifdef LOG_INPUT
-            Serial.print("\nloop_count: ");
-            Serial.println(loop_count);
-            Serial.print("overflow count: ");
-            Serial.println(overflows);
-            Serial.print("ypr\t");
-            Serial.print(ypr[0] * 180/M_PI);  // yaw
-            Serial.print("\t");
-            Serial.print(ypr[1] * 180/M_PI);  // pitch
-            Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI); // roll
-        #endif
-
-
-        #ifdef LOG_TELEM
-          Serial.print("\nloop_count: ");
-          Serial.println(loop_count); 
-          Serial.print("PID Output: ");
-          Serial.println(output); 
-          Serial.print("PID Input: ");
-          Serial.println(input); 
-          Serial.print("Direction: ");
-          Serial.println(directionality);
-          Serial.print("Speed: ");
-          Serial.println(abs_output); 
-        #endif
+  // Completely arbitrary assignment. depends on which side of the robot you consider "forward".
+  if (output < 0.0)
+  {
+    directionality = BACKWARD;
+    // additionally, output needs to be converted to positive using abs(output) 
+  }
+  else
+  {
+    directionality = FORWARD;
+  }
 
 
 
-        #ifdef SERIAL_PLOT
-          Serial.print(input); 
-          Serial.print(",");
-          Serial.println(setpoint);
-        #endif
+}
 
-
-        mpu.resetFIFO();  // To prevent overflows
-
-   }
-
-   loop_count += 1;
+void control_left()
+{
+  left_motor->setSpeed(abs(output)); // 50
+  left_motor->run(directionality);
 }
 
 
+void control_right()
+{
+  right_motor->setSpeed(abs(output)); // 50
+  right_motor->run(directionality);
+}
 
 
-
-
+// -- Good --
+void MPUMath() {
+  mpu.dmpGetQuaternion(&q, fifoBuffer);
+  mpu.dmpGetGravity(&gravity, &q);
+  mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+  Yaw = (ypr[0] * 180 / M_PI);
+  Pitch = (ypr[1] * 180 / M_PI);
+  Roll = (ypr[2] * 180 / M_PI);
+}
+// ---------
