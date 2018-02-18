@@ -16,10 +16,8 @@
 
 
 // --------------DEBUGGING-------------------
-// Uncomment to see MPU values
-#define LOG_INPUT
 // Uncomment to see Telemetry
-//#define LOG_TELEM
+#define LOG_TELEM
 // Uncomment to output serial plot variables
 //#define SERIAL_PLOT
 
@@ -28,14 +26,23 @@ long overflows = 0;
 
 
 //--------------PID SETPOINTS-------------------
-double originalSetpoint = 87.7;  // what angle [DEG] is the IMU when bot is balanced?
+double originalSetpoint = 88.0;  // what angle [DEG] is the IMU when bot is balanced?
 double setpoint = originalSetpoint;
 //double movingAngleOffset = 0.1;
 double input, output;
 //int moveState=0; //0 = balance; 1 = back; 2 = forth
-double Kp = 20; //50 > Kp > 35  //50 //34
+double Kp = 30; //50 > Kp > 35  //50 //30
 double Kd = 0; // 1 > Kd > 0
 double Ki = 0;
+//double Kp = 35;
+//double Kd = 5;
+//double Ki = 60;
+uint16_t pid_smpl_time_ms = 5;  // How often, in milliseconds, the PID will be evaluated. (originally set to 15)
+double pid_speed_max = 255;
+double pid_speed_min = -255;
+double min_mtr_speed = 20;
+double max_mtr_speed = 255;
+double set_speed = 0;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, REVERSE);
 
 
@@ -78,36 +85,7 @@ int MPUOffsets[6] = {  -2423,  -806,   888,    136,   160,   -110}; //MPU6050 on
 // ===                      MPU DMP SETUP                       ===
 // ================================================================
 int FifoAlive = 0; // tests if the interrupt is triggering
-//int IsAlive = -20;     // counts interrupt start at -20 to get 20+ good values before assuming connected
-// MPU control/status vars
-//uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
-//uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
-//uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
-//uint16_t fifoCount;     // count of all bytes currently in FIFO
-//uint8_t fifoBuffer[64]; // FIFO storage buffer
 
-// orientation/motion vars
-//Quaternion q;           // [w, x, y, z]         quaternion container
-//VectorInt16 aa;         // [x, y, z]            accel sensor measurements
-//VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
-//VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
-//VectorFloat gravity;    // [x, y, z]            gravity vector
-//float euler[3];         // [psi, theta, phi]    Euler angle container
-//float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-//float Yaw, Pitch, Roll; // in degrees
-
-// ================================================================
-// ===                      Control Global Variables            ===
-// ================================================================
-//float angle_now = 0;
-//float angle_speed_now = 0;
-//float angle_sum = 0;
-//unsigned long time_now = 0;
-//float filter_spread = 0.7;
-//int voltage = 0;
-//double Kp = 70; //50 > Kp > 35  //50 //34
-//double Kd = 0; // 1 > Kd > 0
-//double Ki = 0;
 
 uint8_t directionality;
 bool motor_toggle = true; // true=left;  false = right
@@ -152,9 +130,7 @@ void setup()
 
 
 //    Serial.println(F("Initializing PID..."));
-    pid.SetMode(AUTOMATIC);
-    pid.SetSampleTime(15);
-    pid.SetOutputLimits(-255, 255);  
+    pid_setup();
 
 
     Serial.println(F("Initializing Motorboard..."));
@@ -185,12 +161,25 @@ void loop() {
   static long QTimer = millis();
   if ((long)( millis() - QTimer ) >= 20) {
     QTimer = millis();
-    Serial.print(F("\t Yaw ")); Serial.print(Yaw);
-    Serial.print(F("\t Pitch ")); Serial.print(Pitch);
-    Serial.print(F("\t Roll ")); Serial.print(Roll);
-    Serial.print(F("\t error: ")); Serial.print(Pitch - setpoint);
-    Serial.print(F("\t output: ")); Serial.print(output);
-    Serial.println();
+
+    #ifdef LOG_TELEM
+        Serial.print(F("\t Yaw ")); Serial.print(Yaw);
+        Serial.print(F("\t Pitch ")); Serial.print(Pitch);
+        Serial.print(F("\t Roll ")); Serial.print(Roll);
+        Serial.print(F("\t error: ")); Serial.print(Pitch - setpoint);
+        Serial.print(F("\t output: ")); Serial.print(output);
+        Serial.print(F("\t set_speed: ")); Serial.print(set_speed);
+        Serial.println();
+    #endif
+
+
+    #ifdef SERIAL_PLOT
+        Serial.print(input); 
+        Serial.print(",");
+        Serial.println(setpoint);
+    #endif
+
+    
   }
 }
 
@@ -300,6 +289,13 @@ void motor_shield_setup() {
 }
 
 
+
+void pid_setup() {
+    pid.SetMode(AUTOMATIC);
+    pid.SetSampleTime(pid_smpl_time_ms);
+    pid.SetOutputLimits(pid_speed_min, pid_speed_max);  // Motors' top speeds
+}
+
 // ================================================================
 // ===        read angle values from the DMP on the IMU         ===
 // ================================================================
@@ -393,25 +389,30 @@ void pid_control() {
     directionality = FORWARD;
   }
 
+//  set_speed = max(min_mtr_speed, abs(output));
+  set_speed = constrain(abs(output), min_mtr_speed, max_mtr_speed);
 
 
 }
 
 void control_left()
 {
-  left_motor->setSpeed(abs(output)); // 50
+  
+  left_motor->setSpeed(set_speed);
+//  left_motor->setSpeed(65); // 50
   left_motor->run(directionality);
 }
 
 
 void control_right()
 {
-  right_motor->setSpeed(abs(output)); // 50
+  right_motor->setSpeed(set_speed);
+//  right_motor->setSpeed(65); // 50
   right_motor->run(directionality);
 }
 
 
-// -- Good --
+
 void MPUMath() {
   mpu.dmpGetQuaternion(&q, fifoBuffer);
   mpu.dmpGetGravity(&gravity, &q);
@@ -420,4 +421,4 @@ void MPUMath() {
   Pitch = (ypr[1] * 180 / M_PI);
   Roll = (ypr[2] * 180 / M_PI);
 }
-// ---------
+
