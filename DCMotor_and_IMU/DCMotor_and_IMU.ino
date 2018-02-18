@@ -382,11 +382,11 @@ void pid_control() {
   //performing PID calculations and output to motors
   pid.Compute();
 
-
-//        if (isnan(output)) 
-//        {
-//            abs_output = 0.0;
-//        }
+  double abs_output = abs(output);
+  if (isnan(output)) 
+  {
+      abs_output = 0.0;
+  }
   // Completely arbitrary assignment. depends on which side of the robot you consider "forward".
   if (output < 0.0)
   {
@@ -398,8 +398,8 @@ void pid_control() {
     directionality = FORWARD;
   }
 
-//  set_speed = max(min_mtr_speed, abs(output));
-  set_speed = constrain(abs(output), min_mtr_speed, max_mtr_speed);
+//  set_speed = max(min_mtr_speed, abs_output);
+  set_speed = constrain(abs_output, min_mtr_speed, max_mtr_speed);
 
 
 }
@@ -426,6 +426,7 @@ void MPUMath() {
   mpu.dmpGetQuaternion(&q, fifoBuffer);
   mpu.dmpGetGravity(&gravity, &q);
   mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+  mpu.resetFIFO(); // trying to prevent the halt
   Yaw = (ypr[0] * 180 / M_PI);
   Pitch = (ypr[1] * 180 / M_PI);
   Roll = (ypr[2] * 180 / M_PI);
