@@ -29,12 +29,12 @@ void setup() {
   //AFMS.begin(1000);  // OR with a different frequency, say 1KHz
   
   // Set the speed to start, from 0 (off) to 255 (max speed)
-  myMotor->setSpeed(255);
+  myMotor->setSpeed(20);
   myMotor->run(FORWARD);
   // turn on motor
 //  myMotor->run(RELEASE);
 
-  myOtherMotor->setSpeed(255);
+  myOtherMotor->setSpeed(20);
   myOtherMotor->run(FORWARD);
   // turn on motor
 //  myOtherMotor->run(RELEASE);

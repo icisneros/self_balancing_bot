@@ -31,16 +31,16 @@ double setpoint = originalSetpoint;
 //double movingAngleOffset = 0.1;
 double input, output;
 //int moveState=0; //0 = balance; 1 = back; 2 = forth
-double Kp = 30; //50 > Kp > 35  //50 //30
+double Kp = 36; //50 > Kp > 35  //50 //30
 double Kd = 0; // 1 > Kd > 0
 double Ki = 0;
 //double Kp = 35;
 //double Kd = 5;
 //double Ki = 60;
-uint16_t pid_smpl_time_ms = 5;  // How often, in milliseconds, the PID will be evaluated. (originally set to 15)
+uint16_t pid_smpl_time_ms = 15;  // How often, in milliseconds, the PID will be evaluated. (originally set to 15)
 double pid_speed_max = 255;
 double pid_speed_min = -255;
-double min_mtr_speed = 20;
+double min_mtr_speed = 40;
 double max_mtr_speed = 255;
 double set_speed = 0;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, REVERSE);
@@ -96,7 +96,7 @@ bool motor_toggle = true; // true=left;  false = right
 
 
 // --------------PIN DEFINITIONS-------------------
-#define INTERRUPT_PIN 2
+#define INTERRUPT_PIN 2  // pin 2 as suggested in the forums
 
 
 
@@ -146,7 +146,16 @@ void setup()
 void loop() {
   if (mpuInterrupt ) { // wait for MPU interrupt or extra packet(s) available
     GetDMP(); // Gets the MPU Data and canculates angles
-    pid_control();
+
+    if (Pitch > 160  || Pitch < 10){
+      Serial.print(F("ERROR. Out of Bounds\n"));
+      set_speed = 0;
+    }
+    else
+    {
+      pid_control();
+    }
+
     if (motor_toggle)
     {
       control_left();
