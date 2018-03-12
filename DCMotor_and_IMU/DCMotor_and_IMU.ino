@@ -1,4 +1,4 @@
-// Setup taken from: https://diyhacking.com/build-arduino-self-balancing-robot/
+
 
 // --------------PID-------------------
 #include "PID_v1.h"
@@ -26,13 +26,13 @@ long overflows = 0;
 
 
 //--------------PID SETPOINTS-------------------
-double originalSetpoint = 88.0;  // what angle [DEG] is the IMU when bot is balanced?
+double originalSetpoint = 88.5;  // what angle [DEG] is the IMU when bot is balanced?
 double setpoint = originalSetpoint;
 //double movingAngleOffset = 0.1;
 double input, output;
 //int moveState=0; //0 = balance; 1 = back; 2 = forth
-double Kp = 36; //50 > Kp > 35  //50 //30
-double Kd = 0; // 1 > Kd > 0
+double Kp = 40; //50 > Kp > 35  //50 //30
+double Kd = 0.7; // 1 > Kd > 0
 double Ki = 0;
 //double Kp = 35;
 //double Kd = 5;
@@ -40,7 +40,7 @@ double Ki = 0;
 uint16_t pid_smpl_time_ms = 15;  // How often, in milliseconds, the PID will be evaluated. (originally set to 15)
 double pid_speed_max = 255;
 double pid_speed_min = -255;
-double min_mtr_speed = 40;
+double min_mtr_speed = 25;    // Has to be slow but enough to keep robot oscillating
 double max_mtr_speed = 255;
 double set_speed = 0;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, REVERSE);
@@ -129,7 +129,7 @@ void setup()
     MPU6050Connect();
 
 
-//    Serial.println(F("Initializing PID..."));
+    Serial.println(F("Initializing PID..."));
     pid_setup();
 
 
