@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Balance Lab · Arduino PID sandbox</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header><div class="brand"><span class="mark">Ⅱ</span><div><h1>Balance Lab</h1><p>Two wheels. One balance loop.</p></div></div><span class="runtime"><span></span> Native Arduino sketch</span></header>
+  <main>
+    <aside>
+      <div class="panel-title"><span>01 / EXPERIMENT</span><button id="reset" class="text-button">Reset all</button></div>
+      <label class="field-label" for="preset">Starting point</label>
+      <select id="preset"><option value="original">Original sketch settings</option><option value="tuning">Tuning example · assumed robot</option></select>
+      <p id="preset-note" class="help">Preserves alternating wheel updates, the minimum PWM, and the original PID initialization.</p>
+      <form id="controls"><div id="gain-fields"></div>
+        <details open><summary>Controller behavior</summary><div id="controller-fields"></div></details>
+        <details><summary>IMU & fault injection</summary><div id="sensor-fields"></div></details>
+        <details><summary>Robot & motors</summary><div id="plant-fields"></div></details>
+        <details><summary>Trial & disturbance</summary><div id="trial-fields"></div></details>
+      </form>
+      <div class="run-actions"><button id="run" class="primary">Run simulation <span>↗</span></button><p id="pending" class="help" aria-live="polite">Ready to run. Settings apply to the next trial.</p></div>
+      <p class="boundary">Robot defaults come from the selected YAML file (robot.yaml by default). Reload this page after editing it. Controls override those values for a trial; they do not write to YAML or firmware.</p>
+    </aside>
+    <section class="workspace">
+      <div class="workspace-heading"><div><span class="eyebrow">02 / OBSERVE</span><h2>A small lab for a tall problem.</h2></div><span id="status" class="status" role="status">Ready</span></div>
+      <div class="metrics"><div><span>Balance time</span><strong id="balance-time">—</strong></div><div><span>RMS tilt</span><strong id="rms">—</strong></div><div><span>Output saturated</span><strong id="saturation">—</strong></div><div><span>Actual PID interval</span><strong id="interval">—</strong></div></div>
+      <section class="stage-card" aria-label="Robot animation">
+        <div class="stage-label"><span>SIDE VIEW / BODY TILT</span><span id="time">0.00 s</span></div>
+        <canvas id="robot" aria-label="Animated robot, with positive tilt to the right"></canvas>
+        <div class="live-values"><span>Tilt <b id="live-angle">—</b></span><span>Left PWM <b id="live-left">—</b></span><span>Right PWM <b id="live-right">—</b></span><span>Sensor age <b id="live-age">—</b></span></div>
+        <div class="playback"><button id="play" disabled>Pause</button><button id="restart" disabled>↺ Replay</button><button id="nudge" disabled>Push +15°/s</button><label for="speed">Playback</label><select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select><input id="scrub" aria-label="Simulation time" type="range" min="0" max="1" value="0" step="0.005" disabled></div>
+      </section>
+      <section class="plot-card"><div class="plot-heading"><h3>Tilt from vertical <span>degrees</span></h3><div class="legend"><span class="cyan">Body</span><span class="amber">Measured</span><span class="muted">Target</span></div></div><canvas id="angle-plot" aria-label="Body and measured tilt over time"></canvas></section>
+      <section class="plot-card"><div class="plot-heading"><h3>What the wheels receive <span>signed PWM</span></h3><div class="legend"><span class="cyan">Left</span><span class="violet">Right</span><span class="amber">PID</span></div></div><canvas id="motor-plot" aria-label="Left and right motor commands and PID output over time"></canvas></section>
+      <div class="footer-actions"><p id="diagnostics">Run a trial to inspect timing, sensor reads, and saturation.</p><button id="csv" disabled>Export CSV</button><button id="settings" disabled>Save settings</button><label class="import-label" for="import">Load settings</label><input type="file" id="import" accept=".json,application/json" hidden></div>
+      <div class="model-note"><strong>A model, with room for reality.</strong><p>A planar inverted pendulum with motor lag, wheel torque reaction, friction and a delayed IMU. Physical defaults and IMU mounting come from the robot YAML file. Mounting angles affect pitch; IMU position affects the side-view drawing only. No yaw motion, slip, electrical faults, I2C transfer time, serial blocking, or DMP sensor fusion is simulated. Gains that work here need validation on your robot.</p><p>The measured trace is sensor pitch relative to its configured upright reading. The graphs show the whole computed trial. Animation and scrubbing replay that trial; changing controls marks it for a new run.</p></div>
+    </section>
+  </main>
+</body>
+</html>

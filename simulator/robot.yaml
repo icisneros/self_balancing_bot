@@ -1,0 +1,87 @@
+# Motor and wheel specifications are sourced below; other robot values remain estimates.
+# Body frame: origin at the axle center, x forward, y left, z upward when upright.
+# Positions are in metres; mounting angles are right-handed degrees.
+environment:
+  gravity_m_s2: 9.81
+
+body:
+  mass_kg: 0.7
+  height_m: 0.30
+  depth_m: 0.10
+  center_of_mass_m:
+    x: 0.0
+    z: 0.15
+  # About the center of mass and the wheel axle direction (body y).
+  # Independent of the drawing dimensions; this default retains the rod approximation.
+  pitch_inertia_kg_m2: 0.00525
+  angular_damping_n_m_s_per_rad: 0.015
+
+base:
+  # Estimated aggregate mass; do not add motor/wheel masses again unless
+  # they are known to have been excluded from the body/base estimates.
+  effective_mass_kg: 0.5
+  # Confirmed: Pololu Wheel 70x8mm Pair (color unspecified), 70 mm diameter.
+  # https://www.pololu.com/product/1425/specs (same geometry/mass across colors)
+  wheel_radius_m: 0.035
+  wheels:
+    count: 2
+    width_m: 0.008
+    # Manufacturer/user rating: 0.5 oz EACH including tire, approximately 14.175 g.
+    # 1 avoirdupois oz = 0.028349523125 kg; rounded here to the nearest milligram.
+    mass_each_kg: 0.014175
+  drag_n_s_per_m: 0.4
+
+motors:
+  # Pololu #3264: 34:1 Metal Gearmotor 25Dx64L mm LP 12V,
+  # with 48 CPR encoder, no protective end cap. User confirmed this model.
+  # Specs: https://www.pololu.com/product/3264/specs
+  # Drawing (page 2, with encoders; L=21 mm for 34:1):
+  # https://www.pololu.com/file/0J1042/25d-metal-gearmotor-dimension-diagram.pdf
+  count: 2
+  specification:
+    rated_voltage_v: 12.0
+    gear_ratio: 34.014
+    mass_each_kg: 0.101
+    diameter_m: 0.025
+    # Nominal catalog length, including encoder but excluding output shaft.
+    # Drawing dimensions sum to 21 + 30.8 + 11.7 = 63.5 mm.
+    length_excluding_output_shaft_m: 0.064
+    gearbox_length_m: 0.021
+    output_shaft_diameter_m: 0.004
+    output_shaft_extension_m: 0.0125
+    no_load_output_speed_rpm: 150.0
+    no_load_current_a: 0.100
+    stall_current_a: 1.100
+    # Manufacturer's rounded metric stall extrapolation; not continuous torque.
+    # 3 kgf*cm * 9.80665 / 100 = 0.2941995 N*m, per gearbox output.
+    stall_output_torque_kgf_cm: 3.0
+    # Already counts both edges of both channels (x4 decoding), at motor shaft.
+    encoder_counts_per_motor_rev: 48
+  # Actual motor-terminal voltage is unknown. 12 V is an operating assumption;
+  # the model scales torque and no-load speed linearly with supply/rated voltage.
+  supply_voltage_v: 12.0
+  # Combined force and wheel speed are derived on load using wheel_radius_m:
+  # F_stall = count * torque_Nm * (supply/rated) / radius
+  # v_free = output_rpm * 2*pi/60 * radius * (supply/rated)
+  # At the confirmed 35 mm wheel radius and assumed 12 V: 16.81 N and 0.550 m/s.
+  # The following dynamic/friction values are still unmeasured estimates.
+  response_time_ms: 35.0
+  deadband_pwm: 15.0
+  polarity: 1  # +1: forward PWM drives forward; -1: reversed wiring.
+
+imu:
+  # Location affects the side-view drawing. Ideal fused orientation does not
+  # depend on position; sensor lever-arm acceleration / DMP fusion is not modeled.
+  position_m:
+    x: 0.0
+    y: 0.0
+    z: 0.16
+  # Sensor-to-body rotation: Rz(yaw) * Ry(pitch) * Rx(roll).
+  # 88.5 reproduces the project's assumed custom upright pitch mapping.
+  mounting_deg:
+    roll: 0.0
+    pitch: 88.5
+    yaw: 0.0
+  output_rate_hz: 100.0
+  delay_ms: 10.0
+  noise_std_deg: 0.0
