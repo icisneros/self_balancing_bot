@@ -40,7 +40,7 @@ double Ki = 0;
 uint16_t pid_smpl_time_ms = 15;  // How often, in milliseconds, the PID will be evaluated. (originally set to 15)
 double pid_speed_max = 255;
 double pid_speed_min = -255;
-double min_mtr_speed = 25;    // Has to be slow but enough to keep robot oscillating
+double min_mtr_speed = 0;     // Optional minimum PWM for nonzero commands; disabled by default
 double max_mtr_speed = 255;
 double set_speed = 0;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, REVERSE);
@@ -88,7 +88,6 @@ int FifoAlive = 0; // tests if the interrupt is triggering
 
 
 uint8_t directionality;
-bool motor_toggle = true; // true=left;  false = right
 // +-+++-------+++++----------+++++++_-0000-------------
 
 
@@ -156,15 +155,9 @@ void loop() {
       pid_control();
     }
 
-    if (motor_toggle)
-    {
-      control_left();
-      motor_toggle = false;
-    }
-    else{
-      control_right();
-      motor_toggle = true;
-    }
+    // Apply this control iteration's command to both wheels.
+    control_left();
+    control_right();
   }
 
   static long QTimer = millis();
@@ -387,6 +380,13 @@ void pid_control() {
   {
       abs_output = 0.0;
   }
+  // A zero request must stop both motors, even if a minimum PWM is configured.
+  if (abs_output == 0.0)
+  {
+    set_speed = 0.0;
+    directionality = RELEASE;
+    return;
+  }
   // Completely arbitrary assignment. depends on which side of the robot you consider "forward".
   if (output < 0.0)
   {
@@ -398,7 +398,6 @@ void pid_control() {
     directionality = FORWARD;
   }
 
-//  set_speed = max(min_mtr_speed, abs_output);
   set_speed = constrain(abs_output, min_mtr_speed, max_mtr_speed);
 
 

@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
         if (!(duration > 0 && duration <= 30)) throw std::runtime_error("duration must be in (0, 30]");
         const double initial=v("initial_angle", 3), imu_hz=c.at("imu_hz");
         if (!(imu_hz >= 10 && imu_hz <= 500)) throw std::runtime_error("invalid IMU frequency");
-        const bool sync=v("sync_motors", 0), prime=v("prime_pid", 0), folded=v("fold_angle", 0);
+        const bool prime=v("prime_pid", 0), folded=v("fold_angle", 0);
         // Physical constants are required arguments supplied by the YAML loader.
         Plant plant{c.at("body_mass"), c.at("axle_mass"), c.at("com_x"), c.at("com_height"),
                     c.at("pitch_inertia"), c.at("gravity"), c.at("wheel_radius"),
@@ -130,10 +130,7 @@ int main(int argc, char** argv) {
                 }
             }
             unsigned previous_reads=sim::imu_reads, previous_pid=sim::pid_updates;
-            bool event=mpuInterrupt;
             loop();
-            // Experimental override: apply this iteration's command to both wheels.
-            if (sync && event) { control_left(); control_right(); }
             if (sim::imu_reads != previous_reads) last_read_time=t;
             if (sim::pid_updates != previous_pid && sim::pid_dt_ms > 0) {
                 min_interval=std::min(min_interval, sim::pid_dt_ms);

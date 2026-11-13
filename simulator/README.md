@@ -153,25 +153,27 @@ Compatibility headers supply Arduino time, a successful Wire connection, a
 virtual MPU6050 FIFO, and motor objects that retain the sketch's signed PWM
 commands. A pinned copy of the actual upstream PID_v1 1.2.1 library performs
 the calculations. See `vendor/README.md` for provenance and the historical
-dependency uncertainty. The original firmware is not modified.
+dependency uncertainty. The simulator compiles the current firmware directly.
 
-The original mode retains:
+The firmware defaults use:
 
-- Alternating wheel updates, minimum PWM 25, and initialization before a valid angle.
+- Both wheels updated in the same control iteration, with minimum PWM disabled.
+- Zero PID output stops both wheels, including when an optional nonzero PWM floor is configured.
 - Gains 40 / 0 / 0.7, setpoint 88.5°, and 15 ms PID gating.
 - FIFO rejection logic, use of stale pitch on failed reads, and the angle cutoff.
 
 The frontend can override gains, sample interval, setpoint, and minimum PWM.
-Two optional harness changes prime the PID with the initial sensor angle and
-apply each motor command to both wheels. These are experiments, not firmware
-fixes. The original sketch still executes in both modes.
+An optional harness setting primes the PID with the initial sensor angle.
+The sketch itself updates both wheels; no harness synchronization override is
+applied. The legacy `sync_motors` setting is accepted for saved-file compatibility
+and has no effect. The same current sketch executes in both presets.
 
 ## First experiment
 
-1. Run **Original sketch settings**. Inspect the startup output, wheel disagreement,
+1. Run **Firmware defaults**. Inspect the startup output, matching wheel commands,
    and actual 20 ms PID interval with a 100 Hz IMU.
 2. Select **Tuning example · assumed robot**, then run again. This example uses
-   Kp 25, Ki 80, Kd 0.3, minimum PWM 0, both wheels together, initialized PID, and
+   Kp 25, Ki 80, Kd 0.3, minimum PWM 0, initialized PID, and
    10 ms samples. It changes multiple settings; use individual controls for
    experiments that isolate a cause.
 3. Pause, scrub, replay at slower speed, or push the robot. The push button

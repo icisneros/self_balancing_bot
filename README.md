@@ -11,5 +11,5 @@ simulator/.venv/bin/python simulator/run.py
 ```
 
 Open **http://127.0.0.1:8765**. See [simulator/README.md](simulator/README.md)
-for setup, model assumptions, and limitations. The Arduino firmware is unchanged.
+for setup, model assumptions, and limitations. The simulator runs the current Arduino firmware.
 Physical parameters and IMU mounting are configured in [simulator/robot.yaml](simulator/robot.yaml).

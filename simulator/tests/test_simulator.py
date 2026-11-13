@@ -7,21 +7,35 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from run import simulate, validate
 
-TUNING = dict(kp=25, ki=80, kd=.3, min_pwm=0, sync_motors=1, prime_pid=1, sample_ms=10)
+TUNING = dict(kp=25, ki=80, kd=.3, min_pwm=0, prime_pid=1, sample_ms=10)
 
 
 class SimulatorTests(unittest.TestCase):
-    def test_original_sketch_exposes_startup_and_alternating_wheels(self):
+    def test_sketch_updates_both_wheels_without_a_harness_override(self):
         data = simulate({'duration': 1})
         first = next(s for s in data['samples'] if s[12] > 0)
-        self.assertEqual(first[6:9], [255, 255, 0])
+        self.assertEqual(first[6:9], [255, 255, 255])
+        self.assertTrue(all(s[7] == s[8] for s in data['samples']))
         self.assertEqual(data['summary']['pid_dt_min'], 20)
         self.assertEqual(data['summary']['pid_dt_max'], 20)
 
-    def test_minimum_pwm_still_applies_at_zero_pid_output(self):
-        data = simulate(dict(initial_angle=0, prime_pid=1, sync_motors=1, duration=1))
+    def test_zero_pid_output_stops_both_wheels_even_with_optional_minimum_pwm(self):
+        data = simulate(dict(initial_angle=0, prime_pid=1, min_pwm=25, duration=1))
         first = next(s for s in data['samples'] if s[12] > 0)
-        self.assertEqual(first[6:9], [0, 25, 25])
+        self.assertEqual(first[6:9], [0, 0, 0])
+        self.assertTrue(all(s[6:9] == [0, 0, 0] for s in data['samples']))
+
+    def test_small_signed_pid_commands_are_not_forced_to_pwm_25(self):
+        for angle in (-1, 1):
+            with self.subTest(angle=angle):
+                data = simulate(dict(initial_angle=angle, kp=2, ki=0, kd=0,
+                                     prime_pid=1, duration=1))
+                first = next(s for s in data['samples'] if s[12] > 0)
+                self.assertAlmostEqual(first[6], 2*angle, places=4)
+                # Float sensor rounding and uint8_t PWM conversion can lose one count.
+                self.assertEqual(first[7], first[8])
+                self.assertGreater(first[7]*angle, 0)
+                self.assertLessEqual(abs(first[7]), 2)
 
     def test_unpowered_upright_equilibrium_and_unstable_lean(self):
         settings = dict(kp=0, ki=0, kd=0, min_pwm=0, initial_angle=0, duration=1)

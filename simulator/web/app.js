@@ -9,8 +9,7 @@ const fields = [
   ['gain','kd','Derivative · Kd',0,10,.05,'PWM · second / degree'],
   ['controller','setpoint','Pitch setpoint',-180,180,.1,'Pitch requested by the controller; match this to your IMU mounting.'],
   ['controller','sample_ms','PID sample time',1,100,1,'ms; actual updates also depend on IMU events.'],
-  ['controller','min_pwm','Minimum motor PWM',0,100,1,'0 allows a true zero command. Original: 25.'],
-  ['controller','sync_motors','Update both wheels together','check','Original sketch alternates left and right.'],
+  ['controller','min_pwm','Minimum nonzero motor PWM',0,100,1,'Optional floor for nonzero requests; firmware default: 0. Zero always stops.'],
   ['controller','prime_pid','Initialize PID with the first angle','check','Avoids interpreting startup as an angle jump.'],
   ['sensor','imu_hz','IMU output rate',10,500,10,'Hz'],
   ['sensor','imu_delay_ms','IMU delay',0,100,1,'ms; a pure delay, independent of sample rate.'],
@@ -107,11 +106,11 @@ function readSettings() {
 }
 function preset(name) {
   const settings={...defaults};
-  if(name==='tuning') Object.assign(settings,{kp:25,ki:80,kd:.3,min_pwm:0,sync_motors:1,prime_pid:1,sample_ms:10});
+  if(name==='tuning') Object.assign(settings,{kp:25,ki:80,kd:.3,min_pwm:0,prime_pid:1,sample_ms:10});
   applySettings(settings);
   $('preset-note').textContent=name==='tuning'
-    ? 'An example that balances the assumed model: both wheels together, zero minimum PWM, primed PID, and 10 ms updates. This changes multiple settings.'
-    : 'Preserves alternating wheel updates, the minimum PWM, and the original PID initialization.';
+    ? 'An example that balances the assumed model: adjusted gains, primed PID, and 10 ms updates. Both wheels receive each command from the firmware.'
+    : 'Uses the current firmware defaults. Both wheels update each iteration; zero PID output stops them, and the minimum PWM is disabled.';
 }
 async function runSimulation({seek=0,autoPlay=true}={}) {
   if(busy) return;

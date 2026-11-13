@@ -13,8 +13,8 @@
     <aside>
       <div class="panel-title"><span>01 / EXPERIMENT</span><button id="reset" class="text-button">Reset all</button></div>
       <label class="field-label" for="preset">Starting point</label>
-      <select id="preset"><option value="original">Original sketch settings</option><option value="tuning">Tuning example · assumed robot</option></select>
-      <p id="preset-note" class="help">Preserves alternating wheel updates, the minimum PWM, and the original PID initialization.</p>
+      <select id="preset"><option value="original">Firmware defaults</option><option value="tuning">Tuning example · assumed robot</option></select>
+      <p id="preset-note" class="help">Uses the current firmware defaults with both wheels updated each iteration and the minimum PWM disabled.</p>
       <form id="controls"><div id="gain-fields"></div>
         <details open><summary>Controller behavior</summary><div id="controller-fields"></div></details>
         <details><summary>IMU & fault injection</summary><div id="sensor-fields"></div></details>

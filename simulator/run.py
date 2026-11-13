@@ -22,7 +22,9 @@ RUN_LIMIT = threading.BoundedSemaphore(4)
 PARAMETERS = {
     'kp': (40, 0, 200), 'ki': (0, 0, 200), 'kd': (.7, 0, 20),
     'setpoint': (88.5, -180, 180), 'sample_ms': (15, 1, 100),
-    'min_pwm': (25, 0, 100), 'sync_motors': (0, 0, 1), 'prime_pid': (0, 0, 1),
+    'min_pwm': (0, 0, 100), 'prime_pid': (0, 0, 1),
+    # Accepted for older saved settings; wheel synchronization is now in the sketch.
+    'sync_motors': (0, 0, 1),
     'initial_angle': (3, -30, 30), 'duration': (12, 1, 30),
     'fold_angle': (0, 0, 1),
     'dropout_at': (3, 0, 30), 'dropout_ms': (0, 0, 2000),
